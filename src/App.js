@@ -5,6 +5,7 @@ import ImageCropper from "./components/ImageCropper";
 function App() {
   const [imageToCrop, setImageToCrop] = useState(undefined);
   const [croppedImage, setCroppedImage] = useState(undefined);
+  const [imageKey, setImageKey] = useState(0); 
 
   const onUploadFile = (event) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -18,6 +19,7 @@ function App() {
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         setImageToCrop(reader.result);
+        setImageKey((prevKey) => prevKey + 1); 
       });
       reader.readAsDataURL(file);
     }
@@ -33,6 +35,7 @@ function App() {
         onChange={onUploadFile}
       />
       <ImageCropper
+        key={imageKey} 
         imageToCrop={imageToCrop}
         onImageCropped={(img) => setCroppedImage(img)}
       />

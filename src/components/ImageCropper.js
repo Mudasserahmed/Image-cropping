@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import ReactCrop from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
+import * as faceapi from "face-api.js";
 
 function ImageCropper({ imageToCrop, onImageCropped }) {
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [cropConfig, setCropConfig] = useState({
     unit: "%",
     width: 50,
@@ -24,29 +26,65 @@ function ImageCropper({ imageToCrop, onImageCropped }) {
       aspect: aspectRatios[finalAspect],
     });
   }, [finalAspect]);
-
+  
   useEffect(() => {
     setCropConfig((prev) => ({
       ...prev,
       aspect: aspectRatios[finalAspect],
     }));
-  
-    setTimeout(() => {
-      setCropConfig((prev) => ({
-        ...prev,
-        aspect: aspectRatios[finalAspect],
-      }));
-    }, 100);
   }, [finalAspect]);
-  
+
+  useEffect(() => {
+    const loadModels = async () => {
+      const MODEL_URL = process.env.PUBLIC_URL + "/models";
+
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      ]);
+      setModelsLoaded(true);
+    };
+    loadModels();
+  }, []);
+
+  useEffect(() => {
+    if (modelsLoaded && imageRef) {
+      detectFaceAndAdjustCrop();
+    }
+  }, [modelsLoaded, imageRef]);
+
+  async function detectFaceAndAdjustCrop() {
+    const img = imageRef;
+    if (!img) return;
+
+    const detections = await faceapi
+      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks();
+
+    if (detections.length > 0) {
+      const { x, y, width, height } = detections[0].detection.box;
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+
+      const cropX = (x / imgWidth) * 100;
+      const cropY = (y / imgHeight) * 100;
+      const cropWidth = (width / imgWidth) * 100;
+      const cropHeight = (height / imgHeight) * 100;
+
+      setCropConfig({
+        unit: "%",
+        x: cropX,
+        y: cropY,
+        width: cropWidth * 1.5, 
+        height: cropHeight * 1.5, 
+        aspect: aspectRatios[finalAspect],
+      });
+    }
+  }
 
   async function cropImage(crop) {
     if (!imageRef || !crop.width || !crop.height) return;
-    const { url } = await getCroppedImage(
-      imageRef,
-      crop,
-      aspectRatios[finalAspect]
-    );
+    const { url } = await getCroppedImage(imageRef, crop, aspectRatios[finalAspect]);
     setCroppedImage(url);
     onImageCropped(url);
   }
@@ -122,12 +160,9 @@ function ImageCropper({ imageToCrop, onImageCropped }) {
               style={{ maxWidth: "100%", borderRadius: "8px" }}
             />
           </ReactCrop>
-
+              {/* you'll have to move the crop cursor after selecting the ratio to reflect the effect on ui */}
           <label> Aspect Ratio:</label>
-          <select
-            onChange={(e) => setFinalAspect(e.target.value)}
-            value={finalAspect}
-          >
+          <select onChange={(e) => setFinalAspect(e.target.value)} value={finalAspect}>
             <option value="1:1">1:1 (Square)</option>
             <option value="4:5">4:5 (Portrait)</option>
             <option value="16:9">16:9 (Landscape)</option>
